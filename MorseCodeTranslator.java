@@ -6,6 +6,7 @@ import javafx.scene.control.TextArea;
 import javafx.scene.text.Text;
 import java.util.HashMap;
 import java.util.Scanner;
+import java.util.Stack;
 import java.io.File;
 
 /**
@@ -25,7 +26,7 @@ public class MorseCodeTranslator extends Application {
     private HashMap<String, Character> code = new HashMap<>(26);
     private int location = 0; //index where the output is typing
     private int startOfKey = 0; //start index of current Morse expression
-    private int prevStartOfKey; //holds the previous start of the current key for backspacing
+    private Stack<Integer> previousStartOfKeys = new Stack<>();
 
     public void start(Stage primaryStage) {
 
@@ -64,22 +65,28 @@ public class MorseCodeTranslator extends Application {
                 case PERIOD: output.setText(output.getText().substring(0, location) + code.get(input.getText().substring(startOfKey, input.getText().length()) + ".")); break;
                 case MINUS: output.setText(output.getText().substring(0, location) + code.get(input.getText().substring(startOfKey, input.getText().length()) + "-")); break;
                 case SPACE: location++; //User is now typing on the next letter, so index is incremented
-                            prevStartOfKey = startOfKey; 
+                            previousStartOfKeys.push(startOfKey); 
                             startOfKey = (input.getText() + " ").indexOf(" ", startOfKey) + 1; break; //User is starting a new Morse expression
                 case SLASH: location += 2; //Increment twice to skip over the space we're adding
                             output.setText(output.getText() + " ");
-                            prevStartOfKey = startOfKey;
+                            previousStartOfKeys.push(startOfKey);
                             startOfKey = (input.getText() + "/").indexOf("/", startOfKey) + 1; break;
                 case BACK_SPACE: char deleted = input.getText().charAt(input.getText().length() - 1);
                                  if(deleted == ' ') { //A space was deleted
                                     location--;
-                                    startOfKey = prevStartOfKey;
+                                    startOfKey = previousStartOfKeys.pop();
                                  } else if(deleted == '/') { //A forward slash was deleted
                                     location -= 2;
                                     output.setText(output.getText().substring(0, output.getText().length() - 1));
-                                    startOfKey = prevStartOfKey;         
+                                    startOfKey = previousStartOfKeys.pop();         
                                  } else { //A piece of a Morse expression was deleted
-                                     output.setText(output.getText().substring(0, location) + code.get(input.getText().substring(startOfKey, input.getText().length() - 1)));
+                                        if(input.getText().substring(startOfKey, input.getText().length() - 1).equals("")) {
+
+                                            output.setText(output.getText().substring(0, output.getText().length() - 1));
+
+                                        } else {
+                                            output.setText(output.getText().substring(0, location) + code.get(input.getText().substring(startOfKey, input.getText().length() - 1)));
+                                        }
                                  } break;
 
            }
