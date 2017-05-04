@@ -2,9 +2,12 @@ import javafx.stage.Stage;
 import javafx.scene.Scene;
 import javafx.application.Application;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.StackPane;
 import javafx.scene.control.TextArea;
+import javafx.scene.control.Button;
 import javafx.scene.text.Text;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.input.KeyCode;
 import java.util.HashMap;
 import java.util.Scanner;
 import java.util.Stack;
@@ -22,17 +25,26 @@ import java.io.File;
  * on handling unexpected characters and an Enlgish to Morse translation.
  * Only characters a-z are currently supported.
  * TODO: find better way to check if the character deleted is the first character of a Morse expression
+ *       figure out why hbox.geChildren().addAll() doesn't add to the pane in the correct order
  */
 public class MorseCodeTranslator extends Application {
 
     private HashMap<String, Character> code = new HashMap<>(26);
     private HashMap<Character, String> en = new HashMap<>(26);
     private int location = 0; //index where the output is typing
-    private int startOfKey = 0; //start index of current Morse expression
-    private Stack<Integer> previousStartOfKeys = new Stack<>();
+    private int mStartOfKey = 0; //start index of current Morse expression
+    private int eStartOfKey = 0;
+    private Stack<Integer> mPreviousStartOfKeys = new Stack<>();
+    private Stack<Integer> ePreviousStartOfKeys = new Stack<>();
+    private StackPane sp = new StackPane();
     private HBox hbox = new HBox();
-    private TextArea input = new TextArea();
-    private TextArea output = new TextArea();
+    private TextArea mInput = new TextArea();
+    private Text mOutput = new Text();
+    private TextArea eInput = new TextArea();
+    private Text eOutput = new Text();
+    private Button swap = new Button("<->");
+    private char mode = 'M';
+
 
     @Override
     /**
@@ -67,18 +79,24 @@ public class MorseCodeTranslator extends Application {
         
         //set the layout information
         hbox.setStyle("-fx-border-color: black");
-        input.setPromptText("Type Morse Code here");
-        input.setFocusTraversable(false);
-        input.setWrapText(true);
-        input.setPrefWidth(250);
-        output.setPromptText("Or type English here");
-        output.setFocusTraversable(false);
-        output.setWrapText(true);
-        output.setPrefWidth(250);
-        hbox.getChildren().addAll(input, output);
+        mInput.setPromptText("Type Morse Code here");
+        mInput.setFocusTraversable(false);
+        mInput.setWrapText(true);
+        mInput.setPrefWidth(250);
+        eInput.setPromptText("Type English here");
+        eInput.setFocusTraversable(false);
+        eInput.setWrapText(true);
+        eInput.setPrefWidth(250);
+        mOutput.setWrappingWidth(250);
+        eOutput.setWrappingWidth(250);
+        swap.setOpacity(0.6);
+
+        hbox.getChildren().addAll(mInput, mOutput);
+        sp.getChildren().addAll(hbox, swap);
 
         //set how to handle KeyEvents
-        input.setOnKeyPressed(e -> {
+        mInput.setOnKeyPressed(e -> {
+            mInput.setEditable(true);
             switch(e.getCode()) {
 
                 //Dots and dashes - update the current letter as the user types
@@ -86,22 +104,48 @@ public class MorseCodeTranslator extends Application {
                 case MINUS: updateEnglish(e); break;
                 case SPACE: advanceEnglish(1, e); break;
                 case SLASH: advanceEnglish(2, e); break;
-                case BACK_SPACE: deleteEnglish(input.getText().charAt(input.getText().length() - 1)); break;
+                case BACK_SPACE: 
+                    if(!mInput.getText().isEmpty())
+                        deleteEnglish(mInput.getText().charAt(mInput.getText().length() - 1)); break;
+                default: mInput.setEditable(false);
 
            }
         });
 
-        output.setOnKeyPressed(e -> {
+        eInput.setOnKeyPressed(e -> {
+            eInput.setEditable(true);
             switch(e.getCode()) {
 
                 case SPACE: advanceMorse(); break;
-                case BACK_SPACE: deleteMorse(output.getText().charAt(output.getText().length() - 1)); break;
-                default: updateMorse(e); break;
+                case BACK_SPACE: 
+                    if(!eInput.getText().isEmpty())
+                        deleteMorse(eInput.getText().charAt(eInput.getText().length() - 1)); break;
+                default: 
+                    if(!e.getCode().isLetterKey() && !(e.getCode() == KeyCode.SPACE))
+                        eInput.setEditable(false);
+                    else   
+                        updateMorse(e); break;
 
             }
         });
 
-        Scene scene = new Scene(hbox, 500, 300);
+        eInput.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+            String keyTyped = e.getText();
+            if(keyTyped.length() != 1) 
+                eInput.setEditable(false);
+        });
+
+        swap.setOnAction(e -> {
+            hbox.getChildren().clear();
+            switch(mode) {
+                case 'M': hbox.getChildren().addAll(eInput, eOutput); 
+                          mode = 'E'; break;
+                case 'E': hbox.getChildren().addAll(mInput, mOutput); 
+                          mode = 'M'; break;
+            }
+        });
+
+        Scene scene = new Scene(sp, 500, 300);
 
         primaryStage.setScene(scene);
         primaryStage.setTitle("Morse Code Translator");
@@ -114,7 +158,7 @@ public class MorseCodeTranslator extends Application {
      */
     public void updateEnglish(KeyEvent k) {
 
-        output.setText(output.getText().substring(0, location) + code.get(input.getText().substring(startOfKey, input.getText().length()) + k.getText()));
+        mOutput.setText(mOutput.getText().substring(0, location) + code.get(mInput.getText().substring(mStartOfKey, mInput.getText().length()) + k.getText()));
 
     }
 
@@ -126,9 +170,9 @@ public class MorseCodeTranslator extends Application {
 
         location += spaces; //User is now typing on the next letter, so index is incremented
         String eAdvancement = location == 1 ? "" : " ";
-        output.setText(output.getText() + eAdvancement);
-        previousStartOfKeys.push(startOfKey); 
-        startOfKey = (input.getText() + k.getText()).indexOf(k.getText(), startOfKey) + 1; //User is starting a new Morse expression
+        mOutput.setText(mOutput.getText() + eAdvancement);
+        mPreviousStartOfKeys.push(mStartOfKey); 
+        mStartOfKey = (mInput.getText() + k.getText()).indexOf(k.getText(), mStartOfKey) + 1; //User is starting a new Morse expression
 
     }
 
@@ -146,16 +190,16 @@ public class MorseCodeTranslator extends Application {
         }
         
         if(deleted == ' ') 
-            startOfKey = previousStartOfKeys.pop();
+            mStartOfKey = mPreviousStartOfKeys.pop();
         else if(deleted == '/') {  
-            output.setText(output.getText().substring(0, output.getText().length() - 1)); //cut off the space that the / put there
-            startOfKey = previousStartOfKeys.pop();
+            mOutput.setText(mOutput.getText().substring(0, mOutput.getText().length() - 1)); //cut off the space that the / put there
+            mStartOfKey = mPreviousStartOfKeys.pop();
         }
         else {
-            if(input.getText().substring(startOfKey, input.getText().length() - 1).equals("")) //first character of a Morse Expression was deleted
-                output.setText(output.getText().substring(0, output.getText().length() - 1)); //delete the English character that was being displayed
+            if(mInput.getText().substring(mStartOfKey, mInput.getText().length() - 1).equals("")) //first character of a Morse Expression was deleted
+                mOutput.setText(mOutput.getText().substring(0, mOutput.getText().length() - 1)); //delete the English character that was being displayed
             else
-                output.setText(output.getText().substring(0, location) + code.get(input.getText().substring(startOfKey, input.getText().length() - 1))); 
+                mOutput.setText(mOutput.getText().substring(0, location) + code.get(mInput.getText().substring(mStartOfKey, mInput.getText().length() - 1))); 
         }
 
     }
@@ -168,10 +212,9 @@ public class MorseCodeTranslator extends Application {
         char keyTyped = k.getText().toLowerCase().charAt(0);
         if(keyTyped != 32 && !(keyTyped <= 122 && keyTyped >= 97)) //neither a-z nor a space was typed
             return;
-        location++;
-        input.setText(input.getText() + en.get(keyTyped) + " ");
-        previousStartOfKeys.push(startOfKey);
-        startOfKey = (input.getText()).indexOf(" ", startOfKey) + 1;
+        eOutput.setText(eOutput.getText() + en.get(keyTyped) + " ");
+    ePreviousStartOfKeys.push(eStartOfKey);
+        eStartOfKey = (eOutput.getText()).indexOf(" ", eStartOfKey) + 1;
 
     }
 
@@ -180,10 +223,9 @@ public class MorseCodeTranslator extends Application {
      */
     public void advanceMorse() {
 
-        location += 2;
-        input.setText(input.getText() + "/");
-        previousStartOfKeys.push(startOfKey);
-        startOfKey = (input.getText()).indexOf("/", startOfKey) + 1;
+        eOutput.setText(eOutput.getText() + "/");
+        ePreviousStartOfKeys.push(eStartOfKey);
+        eStartOfKey = (eOutput.getText()).indexOf("/", eStartOfKey) + 1;
 
     }
 
@@ -192,12 +234,11 @@ public class MorseCodeTranslator extends Application {
      */
     public void deleteMorse(char deleted) {
 
-        location -= deleted == ' ' ? 2 : 1;
-        startOfKey = previousStartOfKeys.pop();
+        eStartOfKey = ePreviousStartOfKeys.pop();
         if(deleted == ' ')
-            input.setText(input.getText().substring(0, input.getText().length() - 2));
+            eOutput.setText(eOutput.getText().substring(0, eOutput.getText().length() - 2));
         else
-            input.setText(input.getText().substring(0, startOfKey));
+            eOutput.setText(eOutput.getText().substring(0, eStartOfKey));
 
     }
 
